@@ -259,7 +259,7 @@ class UWMiterFootprintWizard(FootprintWizardBase.FootprintWizard):
         posx += (pad_l/2)*math.sin(angle)
         posy += (pad_l/2)*math.cos(angle)
         size_pad = wxSize(pad_l, width)
-        module.Add(self.smdRectPad(module, size_pad, wxPoint(posx,posy), "2", (angle_deg-90)*10))
+        module.Add(self.smdRectPad(module, size_pad, wxPoint(posx,posy), "1", (angle_deg-90)*10))
         # moving anchor to center of first pad
         module.MoveAnchorPosition(wxPoint(-width/2,pad_l/2))
         self.buildmessages = (
