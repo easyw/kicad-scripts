@@ -1,6 +1,7 @@
 # This python script wizard creates a mitered bend for microwave applications
 # https://lists.launchpad.net/kicad-developers/msg17996.html
-# Author  Henrik Forsten
+# Author  Henrik Forsten & easyw
+# improved pads using Primitive pads, single net node 
 
 from __future__ import division
 import FootprintWizardBase
@@ -56,6 +57,34 @@ class UWMiterFootprintWizard(FootprintWizardBase.FootprintWizard):
             #DRC doesn't allow routing the pads
             pad.SetLocalClearance(1)
             return pad
+            
+    # build a custom pad
+    def smdCustomPolyPad(self, module, size, pos, name, vpoints, layer, solder_clearance):
+        pad = D_PAD(module)
+        ## NB pads must be the same size and have the same center
+        pad.SetSize(size)
+        #pad.SetSize(pcbnew.wxSize(size[0]/5,size[1]/5))
+        pad.SetShape(PAD_SHAPE_CUSTOM) #PAD_RECT)
+        pad.SetAttribute(PAD_ATTRIB_SMD) #PAD_SMD)
+        #pad.SetDrillSize (0.)
+        #Set only the copper layer without mask
+        #since nothing is mounted on these pads
+        #pad.SetPos0(wxPoint(0,0)) #pos)
+        #pad.SetPosition(wxPoint(0,0)) #pos)
+        pad.SetPos0(pos)
+        pad.SetPosition(pos)
+        #pad.SetOffset(pos)
+        pad.SetPadName(name)
+        #pad.Rotate(pos, angle)
+        pad.SetAnchorPadShape(PAD_SHAPE_RECT) #PAD_SHAPE_CIRCLE) #PAD_SHAPE_RECT)
+        if solder_clearance > 0:
+            pad.SetLocalSolderMaskMargin(solder_clearance)
+            pad.SetLayerSet(pad.ConnSMDMask())
+        else:
+            pad.SetLayerSet( LSET(layer) )
+        
+        pad.AddPrimitive(vpoints,0) # (size[0]))
+        return pad
 
     def Polygon(self, points, layer):
             """
@@ -226,29 +255,43 @@ class UWMiterFootprintWizard(FootprintWizardBase.FootprintWizard):
         #   \   |
         #    \--+ 5
         #    6
-
+        
+        # maui extension of polygon
+        #points = [
+        #        (0,0-w/2),
+        #        (w,0-w/2),
+        #        (w,a),
+        #        (w+x34+w/2*math.sin(angle),a+y34+w/2*math.cos(angle)),
+        #        (w+x34-x45+w/2*math.sin(angle),a+y34+y45+w/2*math.cos(angle)),
+        #        (cut*math.sin(angle),a+width*math.tan(angle/2)+cut*math.cos(angle)),
+        #        (0,a+width*math.tan(angle/2)-cut),
+        #        (0,0-w/2)]
         points = [
-                (0,0),
-                (w,0),
-                (w,a),
-                (w+x34,a+y34),
-                (w+x34-x45,a+y34+y45),
-                (cut*math.sin(angle),a+width*math.tan(angle/2)+cut*math.cos(angle)),
-                (0,a+width*math.tan(angle/2)-cut),
-                (0,0)]
+                (0-w/2,0-w/2+w/2),
+                (w-w/2,0-w/2+w/2),
+                (w-w/2,a+w/2),
+                (w+x34+w/2*math.sin(angle)-w/2,a+y34+w/2*math.cos(angle)+w/2),
+                (w+x34-x45+w/2*math.sin(angle)-w/2,a+y34+y45+w/2*math.cos(angle)+w/2),
+                (cut*math.sin(angle)-w/2,a+width*math.tan(angle/2)+cut*math.cos(angle)+w/2),
+                (0-w/2,a+width*math.tan(angle/2)-cut+w/2),
+                (0-w/2,0-w/2+w/2)]
 
         #Last two points can be equal
         if points[-2] == points[-1]:
             points = points[:-1]
 
         points = [wxPoint(*point) for point in points]
-
-        self.Polygon(points, F_Cu)
+        vpoints = wxPoint_Vector(points)
+        #self.Polygon(points, F_Cu)
 
         #Create pads
         pad_l = width/2 #10 allowing big track to join the fp
         size_pad = wxSize(width,pad_l)
-        module.Add(self.smdRectPad(module, size_pad, wxPoint(width/2,-pad_l/2), "1", 0))
+        
+        #module.Add(self.smdRectPad(module, size_pad, wxPoint(width/2,-pad_l/2), "1", 0))
+        layer = F_Cu; sold_clear = 0
+        module.Add(self.smdCustomPolyPad(module, size_pad, wxPoint(width/2,-pad_l/2), "1", vpoints, layer,sold_clear))
+        # smdCustomPolyPad(self, module, size, pos, name, points, layer, solder_clearance):
         size_pad = wxSize(pad_l,width)
 
         #Halfway between points 4 and 5
@@ -257,7 +300,7 @@ class UWMiterFootprintWizard(FootprintWizardBase.FootprintWizard):
 
         #Position pad so that pad edge touches polygon edge
         posx += (pad_l/2)*math.sin(angle)
-        posy += (pad_l/2)*math.cos(angle)
+        posy += (pad_l/2)*math.cos(angle)+w/4
         size_pad = wxSize(pad_l, width)
         module.Add(self.smdRectPad(module, size_pad, wxPoint(posx,posy), "1", (angle_deg-90)*10))
         # moving anchor to center of first pad
